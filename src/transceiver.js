@@ -199,11 +199,11 @@ angular.module('transceiver', [])
         angular.forEach(events, function(eventName) {
           var prefixedEvent = this.options.eventPrefix + eventName;
           var forwardBroadcast = asyncAngularify(this.ioSocket, function(data) {
+            var key = prefixedEvent;
             if (shouldAddModelName) {
-              scope.$broadcast(prefixedEvent + ":" + data.model, data);
-            } else {
-              scope.$broadcast(prefixedEvent, data);
+              key = prefixedEvent + ":" + data.model.toLowerCase();
             }
+            scope.$broadcast(key, data);
           });
           scope.$on('$destroy', function() {
             this.ioSocket.removeListener(eventName, forwardBroadcast);
