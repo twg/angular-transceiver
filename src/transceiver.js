@@ -40,12 +40,12 @@ angular.module('transceiver', [])
       };
 
       Socket.prototype.on = function addSocketListener(eventName, callback) {
-        this.ioSocket.on(eventName, asyncAngularify(this.ioSocket, callback));
+        this.ioSocket.on(eventName, asyncAngularify(this, callback));
       };
       Socket.prototype.addListener = Socket.prototype.on;
 
       Socket.prototype.off = function removeSocketListener() {
-        return this.ioSocket.removeListener.apply(this.ioSocket, arguments);
+        return this.ioSocket.removeListener.apply(this, arguments);
       };
       Socket.prototype.removeListener = Socket.prototype.off;
 
@@ -207,7 +207,7 @@ angular.module('transceiver', [])
           });
           scope.$on('$destroy', function() {
             this.ioSocket.removeListener(eventName, forwardBroadcast);
-          });
+          }.bind(this));
           this.ioSocket.on(eventName, forwardBroadcast);
         }, this);
       };
@@ -265,7 +265,7 @@ angular.module('transceiver', [])
             $http.get(this.options.url)
               .success(function(data, status) {
                 this.ioSocket.connect();
-              })
+              }.bind(this))
               .error(function(data, status) {
                 if (attempts < this.options.reconnectionAttempts) {
                   retry();
@@ -274,9 +274,9 @@ angular.module('transceiver', [])
                   $log.error('socket::failure');
                   $rootScope.$broadcast(this.options.eventPrefix + 'failure');
                 }
-              });
-          }, this.options.reconnectionDelay(attempts++));
-        };
+              }.bind(this));
+          }.bind(this), this.options.reconnectionDelay(attempts++));
+        }.bind(this);
 
         if (attempts < this.options.reconnectionAttempts) retry();
       };
