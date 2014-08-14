@@ -299,31 +299,39 @@ angular.module('transceiver', [])
     function($rootScope, $location) {
       "use strict";
 
+      var pathToModel = function(path) {
+        return inflection.singularize(inflection.camelize(path));
+      };
+
       return function setupSocket(data, transform) {
         if (!transform) throw new Error("Transform function must be passed to setupSocket.");
 
         _.forEach(data, function(value, key) {
-          $rootScope.$on('socket:create:' + key, function(ev, created) {
+          var modelName = pathToModel(key).toLowerCase();
+
+          $rootScope.$on('socket:create:' + modelName, function(ev, created) {
             data[key][created.id] = created.data;
             transform(data, 'create', key, created);
           });
-          $rootScope.$on('socket:enter:' + key, function(ev, entered) {
+          $rootScope.$on('socket:enter:' + modelName, function(ev, entered) {
             data[key][entered.id] = entered.data;
             transform(data, 'enter', key, entered);
           });
-          $rootScope.$on('socket:update:' + key, function(ev, updated) {
+          $rootScope.$on('socket:update:' + modelName, function(ev, updated) {
             data[key][updated.id] = updated.data;
             transform(data, 'update', key, updated);
           });
-          $rootScope.$on('socket:exit:' + key, function(ev, exited) {
+          $rootScope.$on('socket:exit:' + modelName, function(ev, exited) {
             delete data[key][exited.id];
             transform(data, 'exit', key, exited);
           });
-          $rootScope.$on('socket:destroy:' + key, function(ev, destroyed) {
+          $rootScope.$on('socket:destroy:' + modelName, function(ev, destroyed) {
             delete data[key][destroyed.id];
             transform(data, 'destroy', key, destroyed);
           });
         });
+
+        transform(data);
       };
     }
   ]);
