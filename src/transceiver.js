@@ -118,8 +118,8 @@ angular.module('transceiver', [])
        */
       Socket.prototype.undoableCreate = function(model, data, cb, error, isUndo) {
         var url = "/api/v1/" + model;
-        var callback = function(data) {
-
+        var callback = function(response) {
+          var data = response.body;
           var undo = function() {
             this.undoableDelete(model, data, function() {
               // Push the original creation function onto the redo stack.
@@ -164,7 +164,7 @@ angular.module('transceiver', [])
       Socket.prototype.undoableDelete = function(model, data, cb, error, isUndo) {
         var url = "/api/v1/" + model + "/" + data.id;
 
-        var callback = function(data) {
+        var callback = function(response) {
           var undo = function() {
             this.undoableCreate(model, data, function(data) {
               // Push a new deletion function onto the redo stack.
