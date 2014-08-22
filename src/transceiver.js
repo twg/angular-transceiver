@@ -295,40 +295,47 @@ angular.module('transceiver', [])
     }
 
   // setupTransceiver is to be called from controllers.
-  ]).factory('setupTransceiver', ['$rootScope', '$location',
-    function($rootScope, $location) {
+  ]).factory('setupTransceiver', [function() {
       "use strict";
 
       var pathToModel = function(path) {
         return inflection.singularize(inflection.camelize(path));
       };
 
-      return function setupSocket(data, transform) {
+      return function setupSocket(scope, data, transform) {
         if (!transform) throw new Error("Transform function must be passed to setupSocket.");
 
-        _.forEach(data, function(value, key) {
+        var unBindFunctions = _.reduce(data, function(acc, value, key) {
           var modelName = pathToModel(key).toLowerCase();
 
-          $rootScope.$on('socket:create:' + modelName, function(ev, created) {
+          var functions = [];
+
+          functions.push(scope.$on('socket:create:' + modelName, function(ev, created) {
             data[key][created.id] = created.data;
             transform(data, 'create', key, created);
-          });
-          $rootScope.$on('socket:enter:' + modelName, function(ev, entered) {
+          }));
+          functions.push(scope.$on('socket:enter:' + modelName, function(ev, entered) {
             data[key][entered.id] = entered.data;
             transform(data, 'enter', key, entered);
-          });
-          $rootScope.$on('socket:update:' + modelName, function(ev, updated) {
+          }));
+          functions.push(scope.$on('socket:update:' + modelName, function(ev, updated) {
             data[key][updated.id] = updated.data;
             transform(data, 'update', key, updated);
-          });
-          $rootScope.$on('socket:exit:' + modelName, function(ev, exited) {
+          }));
+          functions.push(scope.$on('socket:exit:' + modelName, function(ev, exited) {
             delete data[key][exited.id];
             transform(data, 'exit', key, exited);
-          });
-          $rootScope.$on('socket:destroy:' + modelName, function(ev, destroyed) {
+          }));
+          functions.push(scope.$on('socket:destroy:' + modelName, function(ev, destroyed) {
             delete data[key][destroyed.id];
             transform(data, 'destroy', key, destroyed);
-          });
+          }));
+
+          return acc.concat(acc, functions);
+        }, []);
+
+        scope.$on("$destroy", function() {
+          _.forEach(unBindFunctions, function(fn) { fn(); });
         });
 
         transform(data);
