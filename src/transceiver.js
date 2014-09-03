@@ -334,11 +334,18 @@ angular.module('transceiver', [])
           return acc.concat(acc, functions);
         }, []);
 
-        scope.$on("$destroy", function() {
+        var unBind = function() {
           _.forEach(unBindFunctions, function(fn) { fn(); });
-        });
+        };
 
-        transform(data);
+        scope.$on("$destroy", unBind);
+
+        //  Immediately call transform on the next tick.
+        setTimeout(function() {
+          transform(data);
+        }, 0);
+
+        return unBind;
       };
     }
   ]);
