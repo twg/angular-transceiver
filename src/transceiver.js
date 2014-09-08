@@ -340,11 +340,8 @@ angular.module('transceiver', [])
 
         scope.$on("$destroy", unBind);
 
-        //  Immediately call transform on the next tick.
-        setTimeout(function() {
-          transform(data);
-        }, 0);
-
+        transform(data);
+        
         return unBind;
       };
     }
