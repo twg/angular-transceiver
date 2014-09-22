@@ -75,27 +75,19 @@ angular.module('transceiver', [])
           data: data
         });
 
-        // Send the message over the socket
-        this.emit(method, json, function afterEmitted(result) {
-          var parsedResult = result;
-          if (result && typeof result === 'string') {
-            try {
-              parsedResult = angular.fromJson(result);
-            } catch (e) {
-              $log.warn("Could not parse:", result, e);
-              return errorCb({
-                error: {
-                  message: 'Bad response from server'
-                }
-              });
-            }
+        $http({
+          method: method,
+          url: url,
+          data: angular.toJson(data),
+          headers: {"X-Transceiver-Socket-ID": this.ioSocket.io.engine.id},
+        }).success(function(result) {
+          if (cb) {
+            cb({statusCode: 200, body: result});
           }
-
-          if (parsedResult && (typeof parsedResult.status) === "number" && (parsedResult.status >= 400)) {
-            $log.warn("Server returned status code ", parsedResult.status);
-            if (errorCb) errorCb(parsedResult);
-          } else {
-            if (cb) cb(parsedResult);
+        }).error(function(error) {
+          $log.warn("Server returned error ", error);
+          if (errorCb) {
+            errorCb(error);
           }
         });
       };
