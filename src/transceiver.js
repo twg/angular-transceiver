@@ -50,6 +50,17 @@ angular.module('transceiver', [])
       Socket.prototype.removeListener = Socket.prototype.off;
 
       Socket.prototype.request = function requestAction(url, data, cb, errorCb, method) {
+        var socketId = this.ioSocket.io.engine.id;
+        if (!socketId) {
+          //  Wait for our connection event, then re-fire this request.
+          var me = this;
+          var originalArgs = arguments;
+          this.on('connect', function() {
+            me.request.apply(me, originalArgs);
+          });
+          return;
+        }
+
         var usage = 'Usage:\n socket.' + (method || 'request') +
           '(destinationURL, dataToSend, fnToCallWhenComplete)';
 
@@ -79,7 +90,7 @@ angular.module('transceiver', [])
           method: method,
           url: url,
           data: angular.toJson(data),
-          headers: {"X-Transceiver-Socket-ID": this.ioSocket.io.engine.id},
+          headers: {"X-Transceiver-Socket-ID": socketId},
         }).success(function(result) {
           if (cb) {
             cb({statusCode: 200, body: result});
