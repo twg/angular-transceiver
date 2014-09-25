@@ -50,10 +50,10 @@ angular.module('transceiver', [])
       Socket.prototype.removeListener = Socket.prototype.off;
 
       Socket.prototype.request = function requestAction(url, data, cb, errorCb, method) {
+        var me = this;
         var socketId = this.ioSocket.io.engine.id;
         if (!socketId) {
           //  Wait for our connection event, then re-fire this request.
-          var me = this;
           var originalArgs = arguments;
           this.on('connect', function() {
             me.request.apply(me, originalArgs);
@@ -95,10 +95,16 @@ angular.module('transceiver', [])
           if (cb) {
             cb({statusCode: 200, body: result});
           }
-        }).error(function(error) {
-          $log.warn("Server returned error ", error);
+        }).error(function(data, status, headers) {
+          $log.warn("Server returned error ", data, status);
           if (errorCb) {
-            errorCb(error);
+            errorCb(data, status, headers);
+          }
+
+          if (status === 0) {
+            //  Status code of 0 indicates that the
+            //  internet has been disconnected.
+            me.ioSocket.disconnect();
           }
         });
       };
