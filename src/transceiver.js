@@ -119,71 +119,160 @@ angular.module('transceiver', [])
       /*
        *  Undoable Socket Functions
        */
-      Socket.prototype.undoableCreate = function(model, data, cb, error, isUndo) {
+      Socket.prototype.undoableCreate = function(model, data, cb, error, isUndoOfDelete, isRedoOfCreate) {
         var url = "/api/v1/" + model;
-        var callback = function(response) {
-          var data = response.body;
-          var undo = function() {
-            this.undoableDelete(model, data, function() {
-              // Push the original creation function onto the redo stack.
-              var redo = function() {
-                this.undoableCreate(model, data);
-              }.bind(this);
-              if (this.undoManager) this.undoManager.addRedo(redo);
-            }.bind(this), undefined, true);
-          }.bind(this);
 
-          if (!isUndo && this.undoManager) this.undoManager.addUndo(undo);
+        if (!isUndoOfDelete && !isRedoOfCreate && this.undoManager) {
+          this.undoManager.clearRedoStack();
+        }
 
-          return cb && cb(data);
-        }.bind(this);
+        var _this = this;
+        return _this.request(url, data, function(response) {
+          var newData = response.body;
 
-        return this.request(url, data, callback, error || this.options.errorCallback, 'post');
+          if (_this.undoManager) {
+            if (isUndoOfDelete) {
+              //  We just undid a delete, so this create will
+              //  override the ID parameter of previous undoable calls.
+              //  We need to replace ID parameters in the undo stack.
+              _this.undoManager.replaceIDs(model, data.id, newData.id);
+            } else {
+              var undoData = {
+                model: model,
+                data: newData,
+                id: newData.id,
+              };
+              _this.undoManager.addUndo(function(undoData) {
+                var newData = undoData.data;
+                var model = undoData.model;
+
+                _this.undoableDelete(model, newData, function() {
+                  // Push the original creation function onto the redo stack.
+                  var redo = function(redoData) {
+                    var model = redoData.model;
+                    var data = redoData.data;
+                    _this.undoableCreate(model, data, function(recreatedObject) {
+                      _this.undoManager.replaceIDs(model, data.id, recreatedObject.id);
+                    }, undefined, false, true);
+                  };
+
+                  if (_this.undoManager) {
+                    var redoData = {
+                      model: model,
+                      data: newData,
+                      id: newData.id,
+                    };
+                    _this.undoManager.addRedo(redo, redoData);
+                  }
+                }, undefined, true, false);
+              }, undoData);
+            }
+          }
+
+          return cb && cb(newData);
+        }, error || this.options.errorCallback, 'post');
       };
-      Socket.prototype.undoableUpdate = function(model, id, oldData, update, cb, error, isUndo) {
-        oldData = angular.copy(oldData);
+
+      Socket.prototype.undoableUpdate = function(model, id, data, update, cb, error, isUndo, isRedo) {
+        data = angular.copy(data);
         update = angular.copy(update);
 
         var url = "/api/v1/" + model + "/" + id;
 
-        var callback = function(response) {
-          var undo = function() {
-            this.undoableUpdate(model, id, update, oldData, function() {
-              // Push a new revert function onto the redo stack.
-              var redo = function() {
-                this.undoableUpdate(model, id, oldData, update);
-              }.bind(this);
-              if (this.undoManager) this.undoManager.addRedo(redo);
-            }.bind(this), undefined, true);
-          }.bind(this);
+        if (!isUndo && !isRedo && this.undoManager) {
+          this.undoManager.clearRedoStack();
+        }
 
-          if (!isUndo && this.undoManager) this.undoManager.addUndo(undo);
+        var _this = this;
+        return _this.request(url, update, function(response) {
+          if (!isUndo && _this.undoManager) {
+            var undoData = {
+              model: model,
+              id: id,
+              data: data,
+              update: update,
+            };
+
+            _this.undoManager.addUndo(function(undoData) {
+              var model = undoData.model;
+              var id = undoData.id;
+              var data = undoData.data;
+              var update = undoData.update;
+              _this.undoableUpdate(model, id, update, data, function() {
+                // Push a new revert function onto the redo stack.
+                if (_this.undoManager) {
+                  var redoData = {
+                    model: model,
+                    id: id,
+                    data: data,
+                    update: update,
+                  };
+
+                  _this.undoManager.addRedo(function(redoData) {
+                    var model = redoData.model;
+                    var id = redoData.id;
+                    var data = redoData.data;
+                    var update = redoData.update;
+                    _this.undoableUpdate(model, id, data, update, undefined, undefined, false, true);
+                  }, redoData);
+                }
+              }, undefined, true, false);
+            }, undoData);
+          }
 
           return cb && cb(response);
-        }.bind(this);
-
-        return this.request(url, update, callback, error || this.options.errorCallback, 'post');
+        }, error || this.options.errorCallback, 'post');
       };
-      Socket.prototype.undoableDelete = function(model, data, cb, error, isUndo) {
+
+      Socket.prototype.undoableDelete = function(model, data, cb, error, isUndoOfCreate, isRedoOfDelete) {
         var url = "/api/v1/" + model + "/" + data.id;
 
-        var callback = function(response) {
-          var undo = function() {
-            this.undoableCreate(model, data, function(data) {
-              // Push a new deletion function onto the redo stack.
-              var redo = function() {
-                this.undoableDelete(model, data);
-              }.bind(this);
-              if (this.undoManager) this.undoManager.addRedo(redo);
-            }.bind(this), undefined, true);
-          }.bind(this);
+        if (!isUndoOfCreate && !isRedoOfDelete && this.undoManager) {
+          this.undoManager.clearRedoStack();
+        }
 
-          if (!isUndo && this.undoManager) this.undoManager.addUndo(undo);
+        var _this = this;
+        return _this.request(url, null, function(response) {
+          if (_this.undoManager) {
+            if (!isUndoOfCreate) {
+              var undoData = {
+                model: model,
+                data: data,
+                id: data.id,
+              };
+              _this.undoManager.addUndo(function(undoData) {
+                var data = undoData.data;
+                var model = undoData.model;
+
+                _this.undoableCreate(model, data, function(newData) {
+                  // Push a new deletion function onto the redo stack.
+                  if (_this.undoManager) {
+                    if (isRedoOfDelete) {
+                      //  We just undid a delete, so this create will
+                      //  override the ID parameter of previous undoable calls.
+                      //  We need to replace ID parameters in the undo stack.
+                      _this.undoManager.replaceIDs(model, data.id, newData.id);
+                    } else {
+                      var redoData = {
+                        model: model,
+                        data: newData,
+                        id: newData.id,
+                      };
+
+                      _this.undoManager.addRedo(function(redoData) {
+                        var model = redoData.model;
+                        var data = redoData.data;
+                        _this.undoableDelete(model, data, undefined, undefined, false, true);
+                      }, redoData);
+                    }
+                  }
+                }, undefined, true, false);
+              }, undoData);
+            }
+          }
 
           return cb && cb(data);
-        }.bind(this);
-
-        return this.request(url, null, callback, error || this.options.errorCallback, 'delete');
+        }, error || this.options.errorCallback, 'delete');
       };
 
       Socket.prototype.emit = function(eventName, data, callback) {
