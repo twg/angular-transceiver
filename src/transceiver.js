@@ -5,7 +5,7 @@ angular.module('transceiver', [])
   .factory('connectTransceiver', ['$rootScope', '$http', '$timeout', '$location', '$log',
     function($rootScope, $http, $timeout, $location, $log) {
       "use strict";
-      
+
       function asyncAngularify(socket, callback) {
         return callback ? function() {
           var args = arguments;
@@ -400,8 +400,16 @@ angular.module('transceiver', [])
         return inflection.singularize(inflection.camelize(path));
       };
 
-      return function setupSocket(scope, data, transform) {
+      return function setupSocket(scope, data, transform, options) {
         if (!transform) throw new Error("Transform function must be passed to setupSocket.");
+
+        if (typeof options === "undefined") {
+          options = {};
+        }
+
+        if (!('isCollection' in options)) {
+          options.isCollection = true;
+        }
 
         var unBindFunctions = _.reduce(data, function(acc, value, key) {
           var modelName = pathToModel(key).toLowerCase();
@@ -409,23 +417,43 @@ angular.module('transceiver', [])
           var functions = [];
 
           functions.push(scope.$on('socket:create:' + modelName, function(ev, created) {
-            data[key][created.id] = created.data;
+            if (options.isCollection) {
+              data[key][created.id] = created.data;
+            } else {
+              data[key] = created.data;
+            }
             transform(data, 'create', key, created);
           }));
           functions.push(scope.$on('socket:enter:' + modelName, function(ev, entered) {
-            data[key][entered.id] = entered.data;
+            if (options.isCollection) {
+              data[key][entered.id] = entered.data;
+            } else {
+              data[key] = entered.data;
+            }
             transform(data, 'enter', key, entered);
           }));
           functions.push(scope.$on('socket:update:' + modelName, function(ev, updated) {
-            data[key][updated.id] = updated.data;
+            if (options.isCollection) {
+              data[key][updated.id] = updated.data;
+            } else {
+              data[key] = updated.data;
+            }
             transform(data, 'update', key, updated);
           }));
           functions.push(scope.$on('socket:exit:' + modelName, function(ev, exited) {
-            delete data[key][exited.id];
+            if (options.isCollection) {
+              delete data[key][exited.id];
+            } else {
+              delete data[key];
+            }
             transform(data, 'exit', key, exited);
           }));
           functions.push(scope.$on('socket:destroy:' + modelName, function(ev, destroyed) {
-            delete data[key][destroyed.id];
+            if (options.isCollection) {
+              delete data[key][destroyed.id];
+            } else {
+              delete data[key];
+            }
             transform(data, 'destroy', key, destroyed);
           }));
 
@@ -439,7 +467,7 @@ angular.module('transceiver', [])
         scope.$on("$destroy", unBind);
 
         transform(data);
-        
+
         return unBind;
       };
     }
